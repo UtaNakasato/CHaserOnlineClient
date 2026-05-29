@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="CHaserOnlineClient.vcxproj" Id="a6ad5210-ea1e-442f-8949-ddf7b897f243" />
+</Solution>
