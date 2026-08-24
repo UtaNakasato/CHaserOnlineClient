@@ -58,12 +58,12 @@ std::string Client::GetReturnCodeFromText(const std::string_view text) {
     return std::string(text.substr(retStart, retEnd - retStart));
 }
 
-Client::Client(const Endpoint& dest, int timeoutSec)
-    : m_httpRequest(dest), m_timeoutSec(timeoutSec) {
+Client::Client(const Endpoint& dest, int timeoutSec, bool noTimeoutForGetReady)
+    : m_httpRequest(dest), m_timeoutSec(timeoutSec), m_noTimeoutForGetReady(noTimeoutForGetReady) {
 }
 
-Client::Client(const Endpoint& dest, const Endpoint& proxy, int timeoutSec)
-    : m_httpRequest(dest, proxy), m_timeoutSec(timeoutSec) {
+Client::Client(const Endpoint& dest, const Endpoint& proxy, int timeoutSec, bool noTimeoutForGetReady)
+    : m_httpRequest(dest, proxy), m_timeoutSec(timeoutSec), m_noTimeoutForGetReady(noTimeoutForGetReady) {
 }
 
 std::string Client::Command(const std::string_view command, const std::string_view params) {
@@ -93,13 +93,23 @@ const std::vector<std::string>& Client::UserCheck(const std::string_view user, c
     while (true) {
         content = Command("UserCheck", std::format("?user={}&pass={}", user, pass));
 
-        if (m_sessionID.empty()) {
-            GetSessionIDFromText(content);
+        try {
+            if (m_sessionID.empty()) {
+                GetSessionIDFromText(content);
+            }
+        }
+        catch (const ParsingException&) {
+            std::cerr << "セッションIDの取得に失敗しました。" << std::endl;
         }
 
-        if (content.find("roomNumber=") != std::string::npos) {
-            GetAvaliableRoomNumbersFromText(content);
-            break;
+        try {
+            if (content.find("roomNumber=") != std::string::npos) {
+                GetAvaliableRoomNumbersFromText(content);
+                break;
+            }
+        }
+        catch (const ParsingException&) {
+            std::cerr << "利用可能なルーム番号の取得に失敗しました。" << std::endl;
         }
 
         if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - start).count() >= m_timeoutSec) {
@@ -135,9 +145,17 @@ std::string Client::GetReadyCheck(const std::string_view getReady) {
             throw GameOverException("ゲームが終了しました");
         }
 
-        ret = GetReturnCodeFromText(content);
-        if (ret.find(",") != std::string::npos) {
-            break;
+        try {
+            ret = GetReturnCodeFromText(content);
+            if (ret.find(",") != std::string::npos) {
+                break;
+            }
+        }
+        catch (const ParsingException&) {
+            std::cerr << "ほかのユーザーの接続を待機しているか、周囲情報の取得に失敗しました。" << std::endl;
+            if (m_noTimeoutForGetReady) {
+                continue;
+            }
         }
 
         if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - start).count() >= m_timeoutSec) {
@@ -157,9 +175,14 @@ std::string Client::CommandCheck(const std::string_view command) {
             throw GameOverException("ゲームが終了しました");
         }
 
-        ret = GetReturnCodeFromText(content);
-        if (ret.find(",") != std::string::npos) {
-            break;
+        try {
+            ret = GetReturnCodeFromText(content);
+            if (ret.find(",") != std::string::npos) {
+                break;
+            }
+        }
+        catch (const ParsingException&) {
+            std::cerr << "周囲情報の取得に失敗しました。" << std::endl;
         }
 
         if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - start).count() >= m_timeoutSec) {
